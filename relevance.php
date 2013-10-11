@@ -150,7 +150,7 @@ class player {
             foreach ($rank as $r) {
                 if ($r['skill'] == 6) continue;
                 if (!in_array($r['skill'], $touched_skills)) {
-                    $r['value'] = min($r['value'], $lowestTop3);
+                    $r['value'] = min($r['value'], min(8.1, $lowestTop3));
                     $r['value_ori'] = min($r['value_ori'], $r['value']);
                     $limitedSkillsFielder[$r['skill']] = $r;
                 }
@@ -275,7 +275,7 @@ class player {
             }
             foreach ($rank as $r) {
                 if (!in_array($r['skill'], $touched_skills)) {
-                    $r['value'] = min($r['value'], $lowestTop3);
+                    $r['value'] = min($r['value'], min($r['skill'] == 6 ? 7.9 : 8.1, $lowestTop3));
                     $r['value_ori'] = min($r['value_ori'], $r['value']);
                     $limitedSkillsKeeper[$r['skill']] = $r;
                 }
