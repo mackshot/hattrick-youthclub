@@ -325,7 +325,7 @@ class player {
                     $max_pot += $term * min(6.9, $value);
                     break;
                 case 'unknown':
-                    $min_pot += 2;
+                    $min_pot += $term * 2;
                     $max_pot += $term * min(6.9, $value);
                     break;
             }
