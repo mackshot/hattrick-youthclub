@@ -92,7 +92,7 @@ class player {
                 case 'actual_estimation':
                 case 'actual':
                     $rank[$i]['value'] = min(8.1, $value + 3);
-                    if ($i != 8 && $value >= 5) $status = 1;
+                    if ($i != 8 && $i != 9 && $value >= 5) $status = 1;
                     if ($i == 8 && $value >= 7) $status = 1;
                     if ($i == 6 && $value >= 5) $status = 2;
                     break;
@@ -102,7 +102,7 @@ class player {
                 case 'max':
                     if ($value == floor($value)) $rank[$i]['value'] = min(8.1, $value + 0.5);
                     else $rank[$i]['value'] = min(8.1, $value);
-                    if ($i != 8 && $value >= 5) $status = 1;
+                    if ($i != 8 && $i != 9 && $value >= 5) $status = 1;
                     if ($i == 8 && $value >= 7) $status = 1;
                     if ($i == 6 && $value >= 5) $status = 2;
                     break;
