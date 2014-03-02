@@ -5,7 +5,7 @@ class player {
     const SCALA_KEEPER_MIN = 2.64;      //
     const SCALA_KEEPER_MAX = 11.35;     // 7.9 + 6.9 * 0.5;
     const SCALA_FIELDER_MIN = 7;        // 3 (skilllevel) * 5 (#skills)
-    const SCALA_FIELDER_MAX = 29.97;    // 8.1 * 3.7;
+    const SCALA_FIELDER_MAX = 31.47;    // (8.1 * 3.7) + 1.5;
 
     protected $_ALLROUNDER = array(
         -1 => 9999,
@@ -19,17 +19,20 @@ class player {
         8 => 31
     );
 
-    function calculate_relevance($speciality, $skills, $ratings, $allrounder, $scouting_age) {
+    function calculate_relevance($promotion_age_years, $promotion_age_days, $speciality, $skills, $ratings, $allrounder, $scouting_age) {
         $status = 0;
         if ($speciality > 0) $status = 1;
 
         $factor = (19 - $scouting_age) * 112 / (4 * 112);
         $age_factor = sqrt(sqrt(sqrt(sqrt(min(1, $factor * 1.3)))));
 
+        $speciality_bonus_min = 0;
+        $speciality_bonus_max = 0;
+
         #region determine skills and top3 cap
         $lowestTop3 = 10;
         $knownTop3 = array();
-        $skills2 = array (3, 4, 5, 6, 7, 8);
+        $skills2 = array (3, 4, 5, 6, 7, 8, 9);
         foreach ($skills2 as $i)
         {
             if ($skills[$i]['top3']) {
@@ -73,7 +76,7 @@ class player {
                 $type = 'rating';
             }
             if ($type == "") {
-                $value = 8.1;
+                $value = 0;
                 $type = 'unknown';
             }
             $values[$i] = array(
@@ -84,6 +87,8 @@ class player {
         }
         if ($values[6]['top3']) $status = 2;
         $rank = array();
+        $htms_rank_min = array();
+        $htms_rank_max = array();
         foreach ($skills2 as $i) {
             $value = $values[$i]['value'];
             $type = $values[$i]['type'];
@@ -92,6 +97,8 @@ class player {
                 case 'actual_estimation':
                 case 'actual':
                     $rank[$i]['value'] = min(8.1, $value + 3);
+                    $htms_rank_min[$i] = $value;
+                    $htms_rank_max[$i] = min(8.1, $value + 3);
                     if ($i != 8 && $i != 9 && $value >= 5) $status = 1;
                     if ($i == 8 && $value >= 7) $status = 1;
                     if ($i == 6 && $value >= 5) $status = 2;
@@ -100,15 +107,29 @@ class player {
                     $rank[$i]['value'] = min(8.1, $value + 1.5);
                     break;
                 case 'max':
-                    if ($value == floor($value)) $rank[$i]['value'] = min(8.1, $value + 0.5);
-                    else $rank[$i]['value'] = min(8.1, $value);
+                    if ($value == floor($value)) {
+                        $rank[$i]['value'] = min(8.1, $value + 0.5);
+                        $htms_rank_min[$i] = $value;
+                        $htms_rank_max[$i] = min(8.1, $value + 0.5);
+                    } else {
+                        $rank[$i]['value'] = min(8.1, $value);
+                        $htms_rank_min[$i] = $value;
+                        $htms_rank_max[$i] = min(8.1, $value);
+                    }
                     if ($i != 8 && $i != 9 && $value >= 5) $status = 1;
                     if ($i == 8 && $value >= 7) $status = 1;
                     if ($i == 6 && $value >= 5) $status = 2;
                     break;
                 case 'unknown':
-                    if ($i == 6) $rank[$i]['value'] = 7.9;
-                    else $rank[$i]['value'] = 8.1;
+                    if ($i == 6) {
+                        $rank[$i]['value'] = 7.9;
+                        $htms_rank_min[$i] = 0;
+                        $htms_rank_max[$i] = 7.9;
+                    } else {
+                        $rank[$i]['value'] = 8.1;
+                        $htms_rank_min[$i] = 0;
+                        $htms_rank_max[$i] = 8.1;
+                    }
                     break;
             }
             $rank[$i]['value_ori'] = $value;
@@ -157,6 +178,125 @@ class player {
             }
             $min_pot = 0;
             $max_pot = 0;
+            #region speciality
+            #region min
+            if ($speciality !== '00') {
+                // defender
+                if ($limitedSkillsFielder[8]['value_ori'] >= 6 ||
+                    ($limitedSkillsFielder[8]['value_ori'] >= 5 && $limitedSkillsFielder[7]['value_ori'] >= 5) ||
+                    ($limitedSkillsFielder[8]['value_ori'] >= 5 && $limitedSkillsFielder[4]['value_ori'] >= 5)
+                ) {
+                    if ($speciality == 4) $speciality_bonus_min = max($speciality_bonus_min, 2);
+                    else if ($speciality == 3) $speciality_bonus_min = max($speciality_bonus_min, 1);
+                }
+                // winger
+                if ($limitedSkillsFielder[4]['value_ori'] >= 6 ||
+                    ($limitedSkillsFielder[4]['value_ori'] >= 5 && $limitedSkillsFielder[7]['value_ori'] >= 5) ||
+                    ($limitedSkillsFielder[4]['value_ori'] >= 5 && $limitedSkillsFielder[3]['value_ori'] >= 5) ||
+                    ($limitedSkillsFielder[4]['value_ori'] >= 5 && $limitedSkillsFielder[8]['value_ori'] >= 5)
+                ) {
+                    if ($speciality == 3) $speciality_bonus_min = max($speciality_bonus_min, 1);
+                    else if ($speciality == 2) $speciality_bonus_min = max($speciality_bonus_min, 2);
+                }
+                // inner midfielder
+                if ($limitedSkillsFielder[3]['value_ori'] >= 6 ||
+                    ($limitedSkillsFielder[3]['value_ori'] >= 5 && $limitedSkillsFielder[7]['value_ori'] >= 5) ||
+                    ($limitedSkillsFielder[3]['value_ori'] >= 5 && $limitedSkillsFielder[3]['value_ori'] >= 5)
+                ) {
+                    if ($speciality == 4) $speciality_bonus_min = max($speciality_bonus_min, 1);
+                    else if ($speciality == 3) $speciality_bonus_min = max($speciality_bonus_min, 2);
+                }
+                // forward
+                if ($limitedSkillsFielder[5]['value_ori'] >= 6 ||
+                    ($limitedSkillsFielder[5]['value_ori'] >= 5 && $limitedSkillsFielder[7]['value_ori'] >= 5) ||
+                    ($limitedSkillsFielder[5]['value_ori'] >= 5 && $limitedSkillsFielder[4]['value_ori'] >= 5)
+                ) {
+                    if ($speciality == 3) $speciality_bonus_min = max($speciality_bonus_min, 2);
+                    else if ($speciality == 2) $speciality_bonus_min = max($speciality_bonus_min, 2);
+                }
+                // deffor
+                if ($limitedSkillsFielder[5]['value_ori'] >= 5 && $limitedSkillsFielder[3]['value_ori'] >= 5) {
+                    if ($speciality == 1) $speciality_bonus_min = max($speciality_bonus_min, 1);
+                }
+                #endregion
+                #region max
+                // defender
+                if (
+                    (
+                        $limitedSkillsFielder[3]['value_ori'] < $limitedSkillsFielder[8]['value'] &&
+                        $limitedSkillsFielder[5]['value_ori'] < $limitedSkillsFielder[8]['value']
+                    ) && (
+                        $limitedSkillsFielder[8]['value'] >= 6 ||
+                        ($limitedSkillsFielder[8]['value'] >= 5 && $limitedSkillsFielder[7]['value'] >= 5) ||
+                        ($limitedSkillsFielder[8]['value'] >= 5 && $limitedSkillsFielder[4]['value'] >= 5)
+                    )
+                ) {
+                    if ($speciality == 4) $speciality_bonus_max = max($speciality_bonus_min, 2);
+                    else if ($speciality == 3) $speciality_bonus_max = max($speciality_bonus_min, 1);
+                    else if ($speciality == '00') $speciality_bonus_max = max($speciality_bonus_max, 2);
+                }
+                // winger
+                if (
+                    (
+                        $limitedSkillsFielder[5]['value_ori'] < $limitedSkillsFielder[4]['value']
+                    ) && (
+                        $limitedSkillsFielder[4]['value'] >= 6 ||
+                        ($limitedSkillsFielder[4]['value'] >= 5 && $limitedSkillsFielder[7]['value'] >= 5) ||
+                        ($limitedSkillsFielder[4]['value'] >= 5 && $limitedSkillsFielder[3]['value'] >= 5) ||
+                        ($limitedSkillsFielder[4]['value'] >= 5 && $limitedSkillsFielder[8]['value'] >= 5)
+                    )
+                ) {
+                    if ($speciality == 3) $speciality_bonus_max = max($speciality_bonus_max, 1);
+                    else if ($speciality == 2) $speciality_bonus_max = max($speciality_bonus_max, 2);
+                    else if ($speciality == '00') $speciality_bonus_max = max($speciality_bonus_max, 2);
+                }
+                // inner midfielder
+                if (
+                    (
+                        $limitedSkillsFielder[8]['value_ori'] < $limitedSkillsFielder[3]['value'] &&
+                        $limitedSkillsFielder[5]['value_ori'] < $limitedSkillsFielder[3]['value']
+                    ) && (
+                        $limitedSkillsFielder[3]['value'] >= 6 ||
+                        ($limitedSkillsFielder[3]['value'] >= 5 && $limitedSkillsFielder[7]['value'] >= 5) ||
+                        ($limitedSkillsFielder[3]['value'] >= 5 && $limitedSkillsFielder[3]['value'] >= 5)
+                    )
+                ) {
+                    if ($speciality == 4) $speciality_bonus_max = max($speciality_bonus_max, 1);
+                    else if ($speciality == 3) $speciality_bonus_max = max($speciality_bonus_max, 2);
+                    else if ($speciality == '00') $speciality_bonus_max = max($speciality_bonus_max, 2);
+                }
+                // forward
+                if (
+                    (
+                        $limitedSkillsFielder[3]['value_ori'] < $limitedSkillsFielder[5]['value'] &&
+                        $limitedSkillsFielder[4]['value_ori'] < $limitedSkillsFielder[5]['value'] &&
+                        $limitedSkillsFielder[8]['value_ori'] < $limitedSkillsFielder[5]['value']
+                    ) && (
+                        $limitedSkillsFielder[5]['value'] >= 6 ||
+                        ($limitedSkillsFielder[5]['value'] >= 5 && $limitedSkillsFielder[7]['value'] >= 5) ||
+                        ($limitedSkillsFielder[5]['value'] >= 5 && $limitedSkillsFielder[4]['value'] >= 5) ||
+                        ($limitedSkillsFielder[5]['value'] >= 5 && $limitedSkillsFielder[3]['value'] >= 5)
+                    )
+                ) {
+                    if ($speciality == 3) $speciality_bonus_max = max($speciality_bonus_max, 2);
+                    else if ($speciality == 2) $speciality_bonus_max = max($speciality_bonus_max, 2);
+                    else if ($speciality == '00') $speciality_bonus_max = max($speciality_bonus_max, 2);
+                }
+                // deffor
+                if (
+                    (
+                        $limitedSkillsFielder[4]['value_ori'] < $limitedSkillsFielder[5]['value'] &&
+                        $limitedSkillsFielder[8]['value_ori'] < $limitedSkillsFielder[5]['value']
+                    ) &&
+                    ($limitedSkillsFielder[5]['value'] >= 5 && $limitedSkillsFielder[3]['value'] >= 5)
+                ) {
+                    if ($speciality == 1) $speciality_bonus_max = max($speciality_bonus_max, 1);
+                    else if ($speciality == '00') $speciality_bonus_max = max($speciality_bonus_max, 2);
+                }
+            }
+            $speciality_bonus_max = max($speciality_bonus_max, $speciality_bonus_min);
+            #endregion
+            #endregion
             #region scoring and defending skill does not match at all
             $skills_to_compare = array(5, 8);
             $skills_compared = array(5 => 0, 8 => 0);
@@ -216,7 +356,7 @@ class player {
                         break;
                     case 'unknown':
                         $min_pot += 2;
-                        $max_pot += $value_ori;
+                        $max_pot += $value;
                         if ($value >= $best_value) {
                             $second_best_value = $best_value;
                             $best_skill = $i;
@@ -232,8 +372,20 @@ class player {
                 $passing_best_skill_factor = sqrt(($second_best_value +0.5)/ $best_value);
             }
             $best_skill_value_factor = sqrt($best_value / 8.1);
-            $min_pot_field = $min_pot * $best_skill_value_factor * $passing_best_skill_factor;
-            $max_pot_field = $max_pot * $best_skill_value_factor * $passing_best_skill_factor;
+
+            $speciality_min_factor = 0;
+            $speciality_max_factor = 0;
+            switch ($speciality_bonus_min) {
+                case 1: $speciality_min_factor = 0.75; break;
+                case 2: $speciality_min_factor = 1.5; break;
+            }
+            switch ($speciality_bonus_max) {
+                case 1: $speciality_max_factor = 0.75; break;
+                case 2: $speciality_max_factor = 1.5; break;
+            }
+
+            $min_pot_field = ($min_pot * $best_skill_value_factor * $passing_best_skill_factor) + $speciality_min_factor;
+            $max_pot_field = ($max_pot * $best_skill_value_factor * $passing_best_skill_factor) + $speciality_max_factor;
             #endregion
         }
 
@@ -333,25 +485,42 @@ class player {
             $max_pot_keeper = $max_pot;
             #endregion
         }
+
+        #region htms
+        $htms_min_cur = 0;
+        $htms_min_cur += self::htms_points(3, $htms_rank_min[3]);
+        $htms_min_cur += self::htms_points(4, $htms_rank_min[4]);
+        $htms_min_cur += self::htms_points(5, $htms_rank_min[5]);
+        $htms_min_cur += self::htms_points(6, $htms_rank_min[6]);
+        $htms_min_cur += self::htms_points(7, $htms_rank_min[7]);
+        $htms_min_cur += self::htms_points(8, $htms_rank_min[8]);
+        $htms_min_cur += self::htms_points(9, $htms_rank_min[9]);
+
+        $htms_min_28 = round($htms_min_cur + self::htms_points_diff_for_age_28($promotion_age_years, $promotion_age_days));
+        $htms_min_cur = round($htms_min_cur);
+        #endregion
+
         $return = array(
             "status" => $status,
             "min_pot_field" => (
-                /* if the max is higher than the possible max (100%), then we have to cut it to 100%
-                 * but the distance, between the min_pot and max_pot should stay on the same level
-                 * and this should also be the case if only the max_pot is higher than the possible max
-                 */
-            self::SCALA_FIELDER_MAX < $max_pot_field ?
-                self::SCALA_FIELDER_MAX / ($max_pot_field / $min_pot_field) :
-                $min_pot_field
-            ) * $age_factor,
+                    /* if the max is higher than the possible max (100%), then we have to cut it to 100%
+                     * but the distance, between the min_pot and max_pot should stay on the same level
+                     * and this should also be the case if only the max_pot is higher than the possible max
+                     */
+                self::SCALA_FIELDER_MAX < $max_pot_field ?
+                    self::SCALA_FIELDER_MAX / ($max_pot_field / $min_pot_field) :
+                    $min_pot_field
+                ) * $age_factor,
             "max_pot_field" => min(self::SCALA_FIELDER_MAX, $max_pot_field) * $age_factor,
             "min_pot_keeper" => (
-                // same as above
-            self:: SCALA_KEEPER_MAX < $max_pot_keeper ?
-                self::SCALA_KEEPER_MAX / ($max_pot_keeper / $min_pot_keeper) :
-                $min_pot_keeper
-            ) * $age_factor,
-            "max_pot_keeper" => min(self::SCALA_KEEPER_MAX, $max_pot_keeper) * $age_factor
+                    // same as above
+                self::SCALA_KEEPER_MAX < $max_pot_keeper ?
+                    self::SCALA_KEEPER_MAX / ($max_pot_keeper / $min_pot_keeper) :
+                    $min_pot_keeper
+                ) * $age_factor,
+            "max_pot_keeper" => min(self::SCALA_KEEPER_MAX, $max_pot_keeper) * $age_factor,
+            "htms_min_cur" => $htms_min_cur,
+            "htms_min_28" => $htms_min_28
         );
         return $return;
     }
